@@ -182,7 +182,7 @@ AutomationOps/
 │   ├── valkey/
 │   └── monitoring/
 │
-├── apps/
+├── app/
 │   ├── api/
 │   ├── frontend/
 │   └── workers/
