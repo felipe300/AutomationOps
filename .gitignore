@@ -1,0 +1,9 @@
+# Env
+.env
+
+# Data
+infra/postgres/data/
+infra/valkey/data/
+
+# Docker
+*.log
