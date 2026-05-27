@@ -1,51 +1,103 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: postgres
     restart: unless-stopped
+
     env_file:
-      - ./.env
+      - ../.env
+
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
     volumes:
-      - ../infra/postgres/data:/var/lib/postgresql/data
+      # - postgres_data:/var/lib/postgresql/data
+      - ../infra/postgres/data:/var/lib/postgres/data
+
     ports:
       - "${POSTGRES_PORT}:5432"
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
     networks:
       - automationops
 
   valkey:
     image: valkey/valkey:7-alpine
-    container_name: valkey
     restart: unless-stopped
+
     command: >
       valkey-server
       --appendonly yes
       --save 60 1000
+
     volumes:
+      # - valkey_data:/data
       - ../infra/valkey/data:/data
+
     ports:
       - "${VALKEY_PORT}:6379"
+
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - automationops
+
+  api:
+    build:
+      context: ../app/api
+
+    restart: unless-stopped
+
+    env_file:
+      - ../.env
+
+    ports:
+      - "3000:3000"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+      valkey:
+        condition: service_healthy
+
     networks:
       - automationops
 
   portainer:
     image: portainer/portainer-ce:latest
-    container_name: portainer
     restart: unless-stopped
-    command: -H unix:///var/run/docker.sock
+
+    command:
+      - "-H"
+      - "unix:///var/run/docker.sock"
+      - "--admin-password"
+      - "${PORTAINER_PASSWORD_HASH}"
+
     ports:
       - "${PORTAINER_PORT_HTTP}:9000"
       - "${PORTAINER_PORT_HTTPS}:9443"
+
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer_data:/data
+
     networks:
       - automationops
 
 volumes:
+  postgres_data:
+  valkey_data:
   portainer_data:
 
 networks:

@@ -1,0 +1,15 @@
+{
+  "name": "automationops-root",
+  "private": true,
+  "scripts": {
+    "up": "docker compose -p automationops --env-file .env -f compose/docker-compose.yml up --build -d",
+    "stop": "docker compose -p automationops --env-file .env -f compose/docker-compose.yml stop",
+    "destroy": "docker compose -p automationops --env-file .env -f compose/docker-compose.yml down -v",
+    "logs": "docker compose -p automationops --env-file .env -f compose/docker-compose.yml logs -f postgres",
+    "db": "docker compose -p automationops --env-file .env -f compose/docker-compose.yml exec postgres psql -U admin -d automationops",
+    "db:push": "cd app/api && bun drizzle-kit push",
+    "db:migrate": "cd app/api && bun drizzle-kit migrate",
+    "api:dev": "cd app/api && bun run dev",
+    "dev:init": "bun up && sleep 3 && bun db:migrate"
+  }
+}

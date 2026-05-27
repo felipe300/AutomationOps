@@ -1,5 +1,6 @@
 # Env
 .env
+.env.local
 
 # Data
 infra/postgres/data/
@@ -7,3 +8,6 @@ infra/valkey/data/
 
 # Docker
 *.log
+
+# Archivos del sistema
+.DS_Store
