@@ -153,6 +153,120 @@ Monitor de disponibilidad autónomo.
 
 - **Uso:** Envía notificaciones (vía Discord, Telegram, Slack o Email) si algún servicio o endpoint experimenta degradación, latencias altas o caídas críticas.
 
+## 🚀 Gestión del Proyecto con Bun (Task Runner)
+
+Para simplificar la experiencia de desarrollo y evitar escribir comandos largos de Docker Compose o duplicar archivos `.env`, este proyecto utiliza **Bun** como gestor de tareas (_Task Runner_) centralizado en la raíz.
+
+No necesitas inicializar un proyecto de JavaScript complejo ni instalar librerías como `dotenv`, ya que Bun lee las variables de entorno de forma nativa.
+
+### Prerrequisitos
+
+Asegúrate de tener instalado:
+
+- [Docker & Docker Compose](https://docs.docker.com/get-docker/)
+- [Bun](https://bun.sh/)
+
+### Comandos Disponibles
+
+Todos los comandos se deben ejecutar desde la **raíz del proyecto**:
+
+| Comando     | Lo que hace                                     | ¿Borra tus datos? |
+| ----------- | ----------------------------------------------- | ----------------- |
+| bun up      | Enciende todo el proyecto en Docker.            | ❌ No             |
+| bun stop    | Apaga el proyecto (guarda tu progreso).         | ❌ No             |
+| bun destroy | Borra todo para empezar desde cero.             | ⚠️ Sí             |
+| bun api:dev | Inicia tu API en la terminal para programar.    | ❌ No             |
+| bun db:push | Actualiza las tablas de la base de datos.       | ❌ No             |
+| bun db      | Entra a la consola interna de Postgres.         | ❌ No             |
+| bun logs    | Muestra los errores y logs de la base de datos. | ❌ No             |
+
+### Flujo de Trabajo Típico en Desarrollo
+
+1. **Iniciar el entorno desde cero:**
+
+```bash
+bun up                  # Levanta Docker (Postgres, Valkey, Portainer)
+
+# Espera unos 3 o 5 segundos
+
+bun db:migrate          # Trae todos los datos de la BD
+bun api:dev             # Enciende tu servidor backend
+
+# Probar end point
+curl localhost:3000/users
+```
+
+Por ahora, te devolverá un hermoso `[]` vacío, lo que significa que tu API se conectó a Postgres con éxito, buscó la tabla de usuarios, vio que existía y te confirmó que no hay nadie guardado aún.
+
+2. **Detener el entorno al terminar el día (Guardando tus datos)**:
+
+```bash
+bun stop
+```
+
+3. **Limpieza profunda (Si algo se rompe o cambias contraseñas del `.env`)**:
+
+```bash
+bun destroy
+```
+
+Bun actúa como un puente inteligente. Mediante el uso del flag `--cwd` en el `package.json` de la raíz, Bun inyecta de forma automática el archivo `.env` principal a herramientas como `drizzle-kit` o `docker-compose`, eliminando la necesidad de configurar variables relativas (`../../.env`) en las subcarpetas del proyecto.
+
+## Configuración de contraseña de administrador en Portainer
+
+Portainer espera que el flag `--admin-password` reciba un **hash bcrypt**, no una contraseña en texto plano.
+
+**Generar hash bcrypt**
+
+```bash
+bun -e "console.log(await Bun.password.hash('change-me', 'bcrypt'))"
+```
+
+Ejemplo de salida:
+
+```bash
+> $2y$05$qeY8gmRvMabc123456789abcdefghijklmnop
+```
+
+Copiar únicamente la parte del hash y agregala en tu archivo `.env`:
+
+```text
+$2y$05$qeY8gmRvMabc123456789abcdefghijklmnop
+```
+
+**Importante: escapar los caracteres `$` en `.env`**
+
+Docker Compose interpreta `$` como variables de entorno. Todos los caracteres `$` dentro del hash bcrypt deben escaparse utilizando `$$`.
+
+```env
+PORTAINER_PASSWORD_HASH=$$2y$$05$$qeY8gmRvMabc123456789abcdefghijklmnop
+```
+
+**Importante: Portainer solo inicializa las credenciales una vez**
+
+Portainer almacena las credenciales dentro de:
+
+```text
+/data/portainer.db
+```
+
+Si la contraseña del usuario `admin` ya fue inicializada anteriormente, modificar el hash en `.env` NO actualizará automáticamente la contraseña.
+
+Es necesario recrear el volumen:
+
+```bash
+bun run destroy
+bun run up
+```
+
+El script `destroy` ejecuta:
+
+```bash
+docker compose down -v
+```
+
+lo que elimina los volúmenes persistentes y fuerza a Portainer a crear nuevamente el usuario administrador.
+
 ## Inicio Rápido (Requisitos Básicos)
 
 **Requisitos Previos**
@@ -163,35 +277,53 @@ Monitor de disponibilidad autónomo.
 **Despliegue**
 
 - Clonar el repositorio y configurar el archivo .env.
-- Levantar la infraestructura completa con un solo comando:
+- Levantar la infraestructura completa con un solo comando, en este caso se utiliza **bun** como _runtime_:
 
 ```bash
-docker compose up -d        # --> Levantar contenedores
-docker ps                   # --> Verificar estado de los contenedores
-docker compose down         # --> Detener contenedores
+bun up
 ```
 
 ## Estructura (Tentativa)
 
 ```bash
-AutomationOps/
-│
-├── infra/
-│   ├── traefik/
-│   ├── postgres/
-│   ├── valkey/
-│   └── monitoring/
-│
-├── app/
-│   ├── api/
-│   ├── frontend/
-│   └── workers/
-│
-├── compose/
-│   ├── docker-compose.yml
-│   └── docker-compose.prod.yml
-│
-├── .env
-├── .env.example
+AutomationOps
+├── app
+│   ├── api
+│   │   ├── bun.lock
+│   │   ├── Dockerfile
+│   │   ├── drizzle
+│   │   │   ├── 0000_ambiguous_squadron_supreme.sql
+│   │   │   └── meta
+│   │   │       ├── 0000_snapshot.json
+│   │   │       └── _journal.json
+│   │   ├── drizzle.config.ts
+│   │   ├── package.json
+│   │   ├── README.md
+│   │   ├── src
+│   │   │   ├── db
+│   │   │   │   ├── client.ts
+│   │   │   │   └── schema.ts
+│   │   │   ├── index.ts
+│   │   │   ├── lib
+│   │   │   ├── middleware
+│   │   │   ├── routes
+│   │   │   │   ├── health.ts
+│   │   │   │   └── users.ts
+│   │   │   └── server.ts
+│   │   └── tsconfig.json
+│   ├── frontend
+│   └── workers
+├── compose
+│   └── docker-compose.yml
+├── infra
+│   ├── monitoring
+│   ├── postgres
+│   │   └── data
+│   ├── traefik
+│   └── valkey
+│       └── data
+│           ├── appendonlydir
+│           └── dump.rdb
+├── package.json
 └── README.md
 ```
